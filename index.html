@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile Scout (PWA Demo)</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#0B0B0C">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Mobile Scout</h1>
+    <span class="badge" id="offlineBadge" title="Offline ready">Offline</span>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="dynamic">Dynamic Day</button>
+    <button class="tab" data-tab="endurance">Endurance</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <section id="dynamic" class="tab-panel active">
+      <div class="card">
+        <h2>Event</h2>
+        <label>Event name
+          <input id="eventName" placeholder="Acceleration / Maneuverability / Suspension" />
+        </label>
+        <label>Current line length
+          <input id="lineLength" type="number" min="0" step="1" value="0" />
+        </label>
+
+        <div class="row">
+          <button id="snapshotBtn">Snapshot Line Length</button>
+          <button id="plusOneBtn">+1 Completion</button>
+        </div>
+
+        <div class="metrics">
+          <div><strong>Window (min):</strong> <input id="windowMin" type="number" min="1" max="60" value="10" /></div>
+          <div><strong>Run rate:</strong> <span id="runRate">0</span> / min</div>
+          <div><strong>ETA:</strong> <span id="eta">–</span> minutes</div>
+          <div><strong>Completions in window:</strong> <span id="compWindow">0</span></div>
+        </div>
+
+        <div class="row">
+          <button id="exportDynamicCsv">Export LineSamples CSV</button>
+        </div>
+
+        <h3>Recent activity</h3>
+        <ul id="dynamicLog" class="list"></ul>
+      </div>
+    </section>
+
+    <section id="endurance" class="tab-panel">
+      <div class="card">
+        <h2>Pit Logs</h2>
+        <label>Car number
+          <input id="carNumber" type="text" placeholder="e.g., 42" />
+        </label>
+
+        <div class="row">
+          <button id="pitInBtn">Pit In</button>
+          <button id="pitOutBtn">Pit Out</button>
+        </div>
+
+        <div class="row">
+          <button id="exportPitCsv">Export PitLogs CSV</button>
+        </div>
+
+        <h3>Recent pit events</h3>
+        <ul id="pitLog" class="list"></ul>
+      </div>
+    </section>
+
+    <section id="settings" class="tab-panel">
+      <div class="card">
+        <h2>Settings</h2>
+        <label>
+          Timezone display
+          <select id="tzMode">
+            <option value="local" selected>Local time</option>
+            <option value="utc">UTC</option>
+          </select>
+        </label>
+        <p class="hint">
+          This is a demo PWA. Data is stored on-device (localStorage) and works offline.<br>
+          For production, swap localStorage for IndexedDB (Dexie/PouchDB).
+        </p>
+        <div class="row">
+          <button id="exportAllBtn">Export ALL Data</button>
+          <button id="clearDataBtn" class="danger">Erase All Data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <small>Install to Home Screen to use fully offline.</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
