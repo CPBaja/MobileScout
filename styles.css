@@ -18,3 +18,5 @@ button.danger{background:#8b0000;border-color:#8b0000}
 .list li{background:#11161d;border:1px solid #30363d;border-radius:12px;padding:10px}
 footer{padding:10px 12px;border-top:1px solid #222;color:#8b949e}
 .hint{color:#8b949e;font-size:14px}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }

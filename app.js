@@ -94,11 +94,37 @@ function persistAll() {
 document.addEventListener('DOMContentLoaded', () => {
   // Tabs
   document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab).classList.add('active');
+    btn.setAttribute('role', 'tab');
+  });
+
+  document.querySelector('nav.tabs').setAttribute('role', 'tablist');
+
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.setAttribute('role', 'tabpanel');
+    if(!panel.classList.contains('active')) panel.hidden = true;
+  });
+  document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.dataset.tab;  
+    //tabs
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t === btn);
+      t.setAttribute('aria-selected', t === btn ? 'true' : 'false');
+    });
+    //panels
+
+    document.querySelectorAll('.tab-panel').forEach(p => {
+      const isTarget = p.id === targetId;
+      p.classList.toggle('active', isTarget);
+      p.hidden = !isTarget;
+    });
+    // render only the active tab
+    if (targetId === 'dynamic') renderDynamic();
+    else if (targetId === 'endurance') renderPit();
+    // settings panel has no list render, so nothing to call
+  
+
+
     });
   });
 
