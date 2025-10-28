@@ -1,0 +1,53 @@
+# Dependency directories
+node_modules/
+
+# Android-specific files
+android/build/
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/app/src/debug/
+android/local.properties
+android/gradle-wrapper/gradle-wrapper.jar
+android/*.iml
+android/captures/
+android/gradle/
+android/key.keystore
+
+# iOS-specific files
+ios/build/
+ios/*.xcworkspace/
+ios/*.xcodeproj/xcuserdata/
+ios/Pods/
+ios/DerivedData/
+ios/Carthage/
+ios/fastlane/report.xml
+ios/*.ipa
+ios/*.dSYM
+ios/AppIcon.xcassets/
+ios/AssetCatalog/
+
+# Metro Bundler cache
+.expo/
+.yarn/
+.webpack/
+.cache/
+.next/
+dist/
+build/
+coverage/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+temp/
+
+# IDE-specific files (e.g., VS Code)
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.*
