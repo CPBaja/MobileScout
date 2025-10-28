@@ -1,8 +1,9 @@
 import AppHeader from '@/components/ui/AppHeader';
 import Card from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import DropDownPicker from 'react-native-dropdown-picker';
 
 const palette = {
     bg: '#0b0b0c', text: '#ffffff', dim: '#c9d1d9',
@@ -23,6 +24,12 @@ export default function DynamicTab() {
     const [samples, setSamples] = useState<LineSample[]>([]);
     const [completions, setCompletions] = useState<Completion[]>([]);
     const onlineRef = useRef(true);
+    const [open, setOpen] = useState(false);
+    const [items, setItems] = useState([
+        { label: 'Acceleration', value: 'Acceleration' },
+        { label: 'Maneuverability', value: 'Maneuverability' },
+        { label: 'Suspension', value: 'Suspension' },
+    ]);
 
     const { rate, count } = useMemo(() => {
         const win = Math.max(1, Math.min(60, Number(windowMin) || 10));
@@ -71,23 +78,29 @@ export default function DynamicTab() {
             <AppHeader />
             <Card>
                 <Text style={styles.h2}>Event</Text>
-
-                <Text style={styles.label}>Event name</Text>
-                <TextInput
-                    value={eventName}
-                    onChangeText={setEventName}
-                    placeholder="Acceleration / Maneuverability / Suspension"
-                    placeholderTextColor={palette.dim}
-                    style={styles.input}
-                />
-
-                <Text style={styles.label}>Current line length</Text>
-                <TextInput
-                    value={String(lineLength)}
-                    onChangeText={setLineLength}
-                    keyboardType="numeric"
-                    style={styles.input}
-                />
+                <View style={{ zIndex: 1000}}>
+                    <DropDownPicker
+                        open={open}
+                        value={eventName}
+                        items={items}
+                        setOpen={setOpen}
+                        setValue={(cb) => setEventName(cb(eventName))}
+                        setItems={setItems}
+                        style={{
+                            backgroundColor: '#161b22',
+                            borderColor: '#30363d',
+                        }}
+                        dropDownContainerStyle={{
+                            backgroundColor: '#11161d',
+                            borderColor: '#30363d',
+                        }}
+                        listItemLabelStyle={{ color: '#ffffffff' }}
+                        textStyle={{ color: '#ffffffff' }}
+                        placeholder="Select event..."
+                        placeholderStyle={{ color: '#c9d1d9' }}
+                        theme="DARK"
+                    />
+                </View>
 
                 <View style={styles.row}>
                     <PrimaryButton title="Snapshot Line Length" onPress={snapshot} />
@@ -95,12 +108,24 @@ export default function DynamicTab() {
                 </View>
 
                 <View style={styles.metrics}>
-                    <Text style={styles.metric}><Text style={styles.metricKey}>Window (min): </Text>
-                        <TextInput value={String(windowMin)} onChangeText={setWindowMin} keyboardType="numeric" style={[styles.input, styles.inputInline]} />
+                    <Text style={styles.metric}>
+                        <Text style={styles.metricKey}>Window (min): </Text>
+                        <TextInput
+                            value={String(windowMin)}
+                            onChangeText={setWindowMin}
+                            keyboardType="numeric"
+                            style={[styles.input, styles.inputInline]}
+                        />
                     </Text>
-                    <Text style={styles.metric}><Text style={styles.metricKey}>Run rate:</Text> {rate.toFixed(2)} / min</Text>
-                    <Text style={styles.metric}><Text style={styles.metricKey}>ETA:</Text> {eta && isFinite(eta) ? eta.toFixed(1) : '–'} minutes</Text>
-                    <Text style={styles.metric}><Text style={styles.metricKey}>Completions in window:</Text> {count}</Text>
+                    <Text style={styles.metric}>
+                        <Text style={styles.metricKey}>Run rate:</Text> {rate.toFixed(2)} / min
+                    </Text>
+                    <Text style={styles.metric}>
+                        <Text style={styles.metricKey}>ETA:</Text> {eta && isFinite(eta) ? eta.toFixed(1) : '–'} minutes
+                    </Text>
+                    <Text style={styles.metric}>
+                        <Text style={styles.metricKey}>Completions in window:</Text> {count}
+                    </Text>
                 </View>
 
                 <View style={styles.row}>
@@ -127,25 +152,32 @@ export default function DynamicTab() {
 
 const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: palette.bg, padding: 12 },
-    header: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingVertical: 8, borderBottomColor: '#222', borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 8
-    },
-    h1: { color: palette.text, fontSize: 18, fontWeight: '700' },
     h2: { color: palette.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
     h3: { color: palette.text, fontSize: 15, fontWeight: '700', marginTop: 10 },
     label: { color: palette.dim, marginBottom: 6 },
     input: {
         backgroundColor: palette.inputBg, color: palette.text, borderColor: palette.border,
-        borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 10
+        borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 10,
+    },
+    pickerContainer: {
+        backgroundColor: palette.inputBg,
+        borderColor: palette.border,
+        borderWidth: 1,
+        borderRadius: 10,
+        marginBottom: 10,
+    },
+    picker: {
+        color: palette.success,
+        height: 50,
+        width: '100%',
     },
     inputInline: { width: 80, paddingVertical: 6, marginLeft: 6 },
     row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginVertical: 4 },
     metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 },
-    metric: { color: palette.text, backgroundColor: 'transparent' },
+    metric: { color: palette.text },
     metricKey: { fontWeight: '700' },
     listItem: {
-        backgroundColor: '#11161d', borderColor: palette.border, borderWidth: 1, borderRadius: 12, padding: 10,
+        backgroundColor: palette.listBg, borderColor: palette.border, borderWidth: 1, borderRadius: 12, padding: 10,
     },
     itemText: { color: palette.text },
 });
