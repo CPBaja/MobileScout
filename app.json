@@ -10,6 +10,7 @@
       "web"
     ],
     "icon": "./assets/images/icon.png",
+    "scheme": "mobilescout",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -51,7 +52,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
