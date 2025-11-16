@@ -1,26 +1,44 @@
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { Text } from 'react-native';
 
-const palette = { bg: '#0b0b0c', active: '#238636', dim: '#c9d1d9' };
-
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
-      initialRouteName="dynamic"  // ← REQUIRED since there's no (tabs)/index.tsx
       screenOptions={{
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarStyle: { backgroundColor: palette.bg, height: 64, paddingVertical: 8, borderTopColor: '#222' },
-        tabBarActiveTintColor: palette.active,
-        tabBarInactiveTintColor: palette.dim,
-        tabBarLabelStyle: { fontSize: 12 },
+        headerShown: false,        
+        tabBarStyle: { backgroundColor: '#0b0b0c', borderTopColor: '#30363d' },
+        tabBarActiveTintColor: '#22c55e',
+        tabBarInactiveTintColor: '#9ca3af',
       }}
     >
-      <Tabs.Screen name="dynamic" options={{ title: 'Dynamic Day', tabBarIcon: ({ color }) => <IconSymbol name="paperplane.fill" size={22} color={color} /> }} />
-      <Tabs.Screen name="endurance" options={{ title: 'Endurance', tabBarIcon: ({ color }) => <IconSymbol name="house.fill" size={22} color={color} /> }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: ({ color }) => <IconSymbol name="chevron.left.forwardslash.chevron.right" size={22} color={color} /> }} />
+      <Tabs.Screen
+        name="dynamic"
+        options={{
+          title: 'Dynamic Day',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="play-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="endurance"
+        options={{
+          title: 'Endurance',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="code-outline" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
