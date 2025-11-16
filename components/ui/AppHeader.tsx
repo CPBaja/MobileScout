@@ -1,74 +1,73 @@
-import * as Network from 'expo-network';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+// components/ui/AppHeader.tsx
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import NetInfo from '@react-native-community/netinfo';
+
+const palette = {
+    bg: '#0b0b0c',
+    text: '#ffffff',
+    dim: '#c9d1d9',
+    border: '#30363d',
+    success: '#1ea44f',
+    danger: '#7c2d12',
+};
 
 export default function AppHeader() {
     const [online, setOnline] = useState(true);
 
     useEffect(() => {
-        let mounted = true;
+        // ✅ Native-safe connectivity
+        const sub = NetInfo.addEventListener((s) => {
+            setOnline(!!(s.isConnected && s.isInternetReachable));
+        });
+        return () => sub();
+    }, []);
 
-        async function check() {
-            try {
-                const state = await Network.getNetworkStateAsync();
-                // Treat "unknown" reachability as online to avoid false negatives.
-                const isConnected = !!state?.isConnected;
-                const isReachable = state?.isInternetReachable;
-                if (mounted) setOnline(isConnected && (isReachable ?? true));
-            } catch {
-                // If the check fails, don't flip the UI to offline abruptly.
-            }
+    // (Optional) if you *also* want to reflect browser events in web builds, keep this guarded block.
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const onUp = () => setOnline(true);
+        const onDown = () => setOnline(false);
+        // Guard for SSR/edge
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('online', onUp);
+            window.addEventListener('offline', onDown);
+            return () => {
+                window.removeEventListener?.('online', onUp);
+                window.removeEventListener?.('offline', onDown);
+            };
         }
-
-        // Initial check + light polling (works in Expo Go and web)
-        check();
-        const interval = setInterval(check, 4000);
-
-        // Bonus: on web, listen to browser events for instant updates
-        const onWebOnline = () => setOnline(true);
-        const onWebOffline = () => setOnline(false);
-        if (typeof window !== 'undefined') {
-            window.addEventListener('online', onWebOnline);
-            window.addEventListener('offline', onWebOffline);
-        }
-
-        return () => {
-            mounted = false;
-            clearInterval(interval);
-            if (typeof window !== 'undefined') {
-                window.removeEventListener('online', onWebOnline);
-                window.removeEventListener('offline', onWebOffline);
-            }
-        };
     }, []);
 
     return (
-        <View style={styles.header}>
-            <Text style={styles.title}>CPBajaScout</Text>
-            <View
-                style={[
-                    styles.badge,
-                    { backgroundColor: online ? '#238636' : '#d4a017' },
-                ]}
-            >
-                <Text style={styles.badgeText}>{online ? 'Online' : 'Offline'}</Text>
+        <SafeAreaView edges={['top']} style={styles.safe}>
+            <View style={styles.header}>
+                <Text style={styles.title}>CPBajaScout</Text>
+                <View style={[styles.badge, { backgroundColor: online ? palette.success : palette.danger }]}>
+                    <Text style={styles.badgeText}>{online ? 'Online' : 'Offline'}</Text>
+                </View>
             </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    safe: { backgroundColor: palette.bg },
     header: {
-        backgroundColor: '#0b0b0c',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderBottomColor: '#30363d',
-        borderBottomWidth: StyleSheet.hairlineWidth,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+        borderBottomColor: palette.border,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    title: { color: '#fff', fontSize: 20, fontWeight: '700' },
-    badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    badgeText: { color: '#fff', fontWeight: '600', fontSize: 12 },
+    title: { color: palette.text, fontSize: 22, fontWeight: '700', paddingTop: 8 },
+    badge: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 });
