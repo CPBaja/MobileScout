@@ -18,6 +18,5 @@ In the output, you'll find options to open the app in a
 
 
 THINGS TO DO: 
-   Add Off-Track Time Calculation for the Endurance tab
    Pull SAE Data for Run Time when online
    Ask Sai for additions once the above are complete. He said Lucia may have additions once she sees the project.
