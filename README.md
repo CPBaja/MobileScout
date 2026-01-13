@@ -18,5 +18,5 @@ In the output, you'll find options to open the app in a
 
 
 THINGS TO DO: 
-   Pull SAE Data for Run Time when online
+   In dynamic tab, the math seems sus. Need to check this out.
    Ask Sai for additions once the above are complete. He said Lucia may have additions once she sees the project.
