@@ -1,8 +1,9 @@
+// app/(tabs)/dynamic.tsx
 import AppHeader from '@/components/ui/AppHeader';
 import Card from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View, Switch, Platform } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, View, Switch, Platform, Alert } from 'react-native';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useOnline } from '@/offline/OnlineProvider';
 
@@ -23,8 +24,8 @@ type LineSample = {
     runRate: number;
     etaMinutes: number | null;
 };
-type Completion = { eventName: string; timestamp: string };
 
+type Completion = { eventName: string; timestamp: string };
 type SAESeen = { carNo: string; firstSeenTs: string };
 
 const SAE_EVENT_CODE: Record<string, string> = {
@@ -35,8 +36,8 @@ const SAE_EVENT_CODE: Record<string, string> = {
 
 const SAE_BASE = 'https://results.bajasae.net/Leaderboard.aspx?Event=';
 
-// Optional: if you set EXPO_PUBLIC_SAE_PROXY_BASE, we’ll use it on web to avoid CORS.
-// Example value: https://your-proxy.example.com/sae?event=  (must end with ?event=)
+// Optional: if you want SAE polling to work on web, set this to your proxy base (must end with ?event=)
+// Example: EXPO_PUBLIC_SAE_PROXY_BASE=https://your-proxy.example.com/sae?event=
 const SAE_PROXY_BASE =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (typeof process !== 'undefined' ? (process as any).env?.EXPO_PUBLIC_SAE_PROXY_BASE : undefined) as
@@ -44,11 +45,10 @@ const SAE_PROXY_BASE =
     | undefined;
 
 function parseCarsWithResults(html: string): string[] {
-    // Convert HTML to text-ish and normalize whitespace
+    // Convert HTML to “text-ish” and normalize whitespace
     const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
-    // Heuristic regex: "<pos> <carNo> ... OK <time>"
-    // We care about carNo. This keeps the parsing light and dependency-free.
+    // Heuristic: "<pos> <carNo> ... OK <time>"
     const re = /\b(\d{1,3})\s+(\d{1,4})\s+.*?\s+OK\s+(\d+(?:\.\d+)?)\b/g;
 
     const cars = new Set<string>();
@@ -65,7 +65,7 @@ async function fetchLeaderboardCars(eventCode: string): Promise<string[]> {
     const directUrl = `${SAE_BASE}${encodeURIComponent(eventCode)}`;
     const proxyUrl = SAE_PROXY_BASE ? `${SAE_PROXY_BASE}${encodeURIComponent(eventCode)}` : undefined;
 
-    // On web, prefer proxy if provided (CORS).
+    // On web, prefer proxy if provided (CORS)
     const urlToUse = Platform.OS === 'web' && proxyUrl ? proxyUrl : directUrl;
 
     const res = await fetch(urlToUse);
@@ -85,7 +85,6 @@ function updateSeenCars(existing: SAESeen[], carsNow: string[], nowIso: string) 
         }
     }
 
-    // Keep bounded history
     return [...additions, ...existing].slice(0, 800);
 }
 
@@ -97,12 +96,14 @@ export default function DynamicTab() {
     const [samples, setSamples] = useState<LineSample[]>([]);
     const [completions, setCompletions] = useState<Completion[]>([]);
 
-    // SAE-derived completions (seen cars)
+    // SAE run-rate
     const [useSAERunRate, setUseSAERunRate] = useState(true);
     const [saeSeen, setSaeSeen] = useState<SAESeen[]>([]);
     const [saeStatus, setSaeStatus] = useState<string>('SAE idle');
 
-    const onlineRef = useRef(true);
+    // Manual run-rate stability
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    const [manualStartTs, setManualStartTs] = useState<string | null>(null);
 
     const [open, setOpen] = useState(false);
     const [items, setItems] = useState([
@@ -111,10 +112,20 @@ export default function DynamicTab() {
         { label: 'Suspension', value: 'Suspension' },
     ]);
 
-    // Poll SAE leaderboard when online + enabled + event selected
+    // Tick so manual/SAE rates update smoothly
     useEffect(() => {
-        onlineRef.current = isOnline;
+        const id = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
 
+    // When event changes, reset SAE “seen” and manual rate session start (avoids mixing)
+    useEffect(() => {
+        setSaeSeen([]);
+        setManualStartTs(null);
+    }, [eventName]);
+
+    // Poll SAE leaderboard when enabled + online + event selected
+    useEffect(() => {
         if (!useSAERunRate) {
             setSaeStatus('SAE disabled (manual mode)');
             return;
@@ -142,81 +153,56 @@ export default function DynamicTab() {
                 const nowIso = new Date().toISOString();
                 setSaeSeen((prev) => updateSeenCars(prev, carsNow, nowIso));
                 setSaeStatus(`SAE OK — ${carsNow.length} cars with results`);
-            } catch (e: any) {
-                // Web CORS or network failures will land here
+            } catch {
                 const msg =
                     Platform.OS === 'web' && !SAE_PROXY_BASE
                         ? 'SAE blocked on web (CORS). Set EXPO_PUBLIC_SAE_PROXY_BASE or use manual.'
-                        : `SAE fetch failed. Using manual if needed.`;
-
+                        : 'SAE fetch failed (network/site). Manual still works.';
                 setSaeStatus(msg);
             }
         };
 
-        // Run once immediately + poll
         tick();
-        const id = setInterval(tick, 20000); // 20s poll; adjust as desired
-
+        const id = setInterval(tick, 20000);
         return () => {
             cancelled = true;
             clearInterval(id);
         };
     }, [eventName, isOnline, useSAERunRate]);
 
-    const { rate, count, sourceLabel } = useMemo(() => {
-        // SAE-based run rate (cars per minute)
-        if (useSAERunRate && isOnline && SAE_EVENT_CODE[eventName]) {
-            if (saeSeen.length === 0) {
-                return { rate: 0, count: 0, sourceLabel: 'SAE' as const };
-            }
-
-            const times = saeSeen
-                .map(s => new Date(s.firstSeenTs).getTime())
-                .sort((a, b) => a - b);
-
-            const durationMin = Math.max(
-                1 / 60, // avoid divide-by-zero
-                (times[times.length - 1] - times[0]) / 60000
-            );
-
-            return {
-                rate: times.length / durationMin,
-                count: times.length,
-                sourceLabel: 'SAE' as const,
-            };
+    function requireEventOrAlert(): string | null {
+        const e = eventName.trim();
+        if (!e) {
+            Alert.alert('Event required', 'Please select an event first.');
+            return null;
         }
+        return e;
+    }
 
-        // Manual completions fallback
-        if (completions.length === 0) {
-            return { rate: 0, count: 0, sourceLabel: 'Manual' as const };
-        }
+    function incrementLine() {
+        if (!requireEventOrAlert()) return;
+        setLineLength((prev) => String((Number(prev) || 0) + 1));
+    }
 
-        const times = completions
-            .filter(c => c.eventName.trim() === (eventName.trim() || 'Event'))
-            .map(c => new Date(c.timestamp).getTime())
-            .sort((a, b) => a - b);
+    function decrementLine() {
+        if (!requireEventOrAlert()) return;
+        setLineLength((prev) => String(Math.max(0, (Number(prev) || 0) - 1)));
+    }
 
-        if (times.length === 0) {
-            return { rate: 0, count: 0, sourceLabel: 'Manual' as const };
-        }
+    // Manual completion: records completion AND removes one from queue
+    function plusOne() {
+        const e = requireEventOrAlert();
+        if (!e) return;
 
-        const durationMin = Math.max(
-            1 / 60,
-            (times[times.length - 1] - times[0]) / 60000
-        );
+        const ts = new Date().toISOString();
+        setCompletions((prev) => [{ eventName: e, timestamp: ts }, ...prev]);
 
-        return {
-            rate: times.length / durationMin,
-            count: times.length,
-            sourceLabel: 'Manual' as const,
-        };
-    }, [saeSeen, completions, eventName, useSAERunRate, isOnline]);
+        // Start manual session timing on first completion for this event
+        setManualStartTs((prev) => prev ?? ts);
 
-
-    const eta = useMemo(() => {
-        const ll = Number(lineLength) || 0;
-        return rate > 0 ? ll / rate : undefined;
-    }, [rate, lineLength]);
+        // completion removes from queue
+        setLineLength((prev) => String(Math.max(0, (Number(prev) || 0) - 1)));
+    }
 
     function snapshot() {
         const ll = Number(lineLength) || 0;
@@ -232,49 +218,57 @@ export default function DynamicTab() {
         setSamples((prev) => [entry, ...prev].slice(0, 50));
     }
 
-    function requireEventOrAlert(): string | null {
-        const e = eventName.trim();
-        if (!e) {
-            alert('Please select an event first.');
-            return null;
+    // Run-rate (no "Window"): SAE uses time since first seen; Manual uses time since first manual completion
+    const { rate, count, sourceLabel } = useMemo(() => {
+        // SAE mode
+        if (useSAERunRate && isOnline && SAE_EVENT_CODE[eventName]) {
+            if (saeSeen.length === 0) return { rate: 0, count: 0, sourceLabel: 'SAE' as const };
+
+            const times = saeSeen
+                .map((s) => new Date(s.firstSeenTs).getTime())
+                .filter((t) => Number.isFinite(t))
+                .sort((a, b) => a - b);
+
+            if (times.length === 0) return { rate: 0, count: 0, sourceLabel: 'SAE' as const };
+
+            const start = times[0];
+            // clamp to avoid weird spikes when there's only just started data
+            const elapsedMin = Math.max(0.25, (nowMs - start) / 60000); // min 15s
+            return { rate: times.length / elapsedMin, count: times.length, sourceLabel: 'SAE' as const };
         }
-        return e;
-    }
 
-    function incrementLine() {
-        if (!requireEventOrAlert()) return;
-        setLineLength(prev => String((Number(prev) || 0) + 1));
-    }
+        // Manual mode
+        const e = eventName.trim() || 'Event';
+        const eventCompletions = completions.filter((c) => c.eventName.trim() === e);
+        const cCount = eventCompletions.length;
 
-    function decrementLine() {
-        if (!requireEventOrAlert()) return;
-        setLineLength(prev => String(Math.max(0, (Number(prev) || 0) - 1)));
-    }
+        if (cCount === 0 || !manualStartTs) {
+            return { rate: 0, count: cCount, sourceLabel: 'Manual' as const };
+        }
 
-    // Manual completion: records completion AND removes one from the queue
-    function plusOne() {
-        const e = requireEventOrAlert();
-        if (!e) return;
+        const start = new Date(manualStartTs).getTime();
+        const elapsedMin = Math.max(0.25, (nowMs - start) / 60000); // min 15s
+        return { rate: cCount / elapsedMin, count: cCount, sourceLabel: 'Manual' as const };
+    }, [useSAERunRate, isOnline, eventName, saeSeen, completions, manualStartTs, nowMs]);
 
-        setCompletions(prev => [{ eventName: e, timestamp: new Date().toISOString() }, ...prev]);
-
-        setLineLength(prev => String(Math.max(0, (Number(prev) || 0) - 1)));
-    }
+    const eta = useMemo(() => {
+        const ll = Number(lineLength) || 0;
+        return rate > 0 ? ll / rate : undefined;
+    }, [rate, lineLength]);
 
     const recent = useMemo(() => {
         const merged = [
             ...samples.map((s) => ({ ts: s.timestamp, text: `[Snapshot] ${s.eventName}: line=${s.lineLength}` })),
             ...completions.map((c) => ({ ts: c.timestamp, text: `[Completion] ${c.eventName}` })),
-            // Optional: show SAE “new car seen” events in activity feed
-            ...(useSAERunRate
-                ? saeSeen.slice(0, 10).map((s) => ({ ts: s.firstSeenTs, text: `[SAE] New result: Car ${s.carNo}` }))
-                : []),
+            ...(useSAERunRate ? saeSeen.slice(0, 10).map((s) => ({ ts: s.firstSeenTs, text: `[SAE] New result: Car ${s.carNo}` })) : []),
         ]
             .sort((a, b) => +new Date(b.ts) - +new Date(a.ts))
             .slice(0, 12);
 
         return merged;
     }, [samples, completions, saeSeen, useSAERunRate]);
+
+    const currentLine = Number(lineLength) || 0;
 
     return (
         <View style={styles.screen}>
@@ -288,29 +282,24 @@ export default function DynamicTab() {
                         value={eventName}
                         items={items}
                         setOpen={setOpen}
-                        setValue={setEventName}
+                        setValue={(cb) => setEventName(cb(eventName))}
                         setItems={setItems}
-                        style={{
-                            backgroundColor: '#161b22',
-                            borderColor: '#30363d',
-                        }}
-                        dropDownContainerStyle={{
-                            backgroundColor: '#11161d',
-                            borderColor: '#30363d',
-                        }}
+                        style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}
+                        dropDownContainerStyle={{ backgroundColor: '#11161d', borderColor: '#30363d' }}
                         listItemLabelStyle={{ color: '#238636' }}
                         textStyle={{ color: '#238636' }}
                         placeholder="Select event..."
                         placeholderStyle={{ color: '#c9d1d9' }}
-                        ArrowDownIconComponent={() => (
-                            <Text style={{ color: '#238636', fontSize: 14 }}>▼</Text>
-                        )}
-                        ArrowUpIconComponent={() => (
-                            <Text style={{ color: '#238636', fontSize: 14 }}>▲</Text>
-                        )}
+                        ArrowDownIconComponent={() => <Text style={{ color: '#238636', fontSize: 14 }}>▼</Text>}
+                        ArrowUpIconComponent={() => <Text style={{ color: '#238636', fontSize: 14 }}>▲</Text>}
                         theme="DARK"
                     />
                 </View>
+
+                <Text style={[styles.metric, { marginTop: 8 }]}>
+                    <Text style={styles.metricKey}>Current line of cars: </Text>
+                    {currentLine}
+                </Text>
 
                 {/* SAE toggle + status */}
                 <View style={styles.row}>
@@ -319,17 +308,14 @@ export default function DynamicTab() {
                         <Text style={[styles.toggleLabel, { color: useSAERunRate ? palette.success : palette.dim }]}>
                             {useSAERunRate ? 'SAE' : 'Manual'}
                         </Text>
-                        <Switch
-                            value={useSAERunRate}
-                            onValueChange={setUseSAERunRate}
-                            thumbColor={useSAERunRate ? palette.success : undefined}
-                        />
+                        <Switch value={useSAERunRate} onValueChange={setUseSAERunRate} />
                     </View>
                 </View>
                 <Text style={styles.statusText}>
-                    {useSAERunRate ? saeStatus : 'Manual mode: use +1 Completion'}
+                    {useSAERunRate ? saeStatus : 'Manual mode: use queue buttons + +1 Completion'}
                 </Text>
 
+                {/* Manual queue controls (restored) */}
                 <View style={styles.row}>
                     <PrimaryButton title="+1 Car in Line" onPress={incrementLine} />
                     <PrimaryButton title="Remove from Queue" onPress={decrementLine} />
@@ -337,15 +323,9 @@ export default function DynamicTab() {
                     <PrimaryButton title="+1 Completion" onPress={plusOne} />
                 </View>
 
-
                 <View style={styles.metrics}>
                     <Text style={styles.metric}>
                         <Text style={styles.metricKey}>Run rate ({sourceLabel}):</Text> {rate.toFixed(2)} / min
-                    </Text>
-
-                    <Text style={styles.metric}>
-                        <Text style={styles.metricKey}>Current line of cars: </Text>
-                        {Number(lineLength) || 0}
                     </Text>
 
                     <Text style={styles.metric}>
@@ -366,9 +346,12 @@ export default function DynamicTab() {
                     data={recent}
                     keyExtractor={(i, idx) => i.ts + idx}
                     contentContainerStyle={{ gap: 8 }}
+                    keyboardShouldPersistTaps="always"
                     renderItem={({ item }) => (
                         <View style={styles.listItem}>
-                            <Text style={styles.itemText}>{new Date(item.ts).toLocaleString()} — {item.text}</Text>
+                            <Text style={styles.itemText}>
+                                {new Date(item.ts).toLocaleString()} — {item.text}
+                            </Text>
                         </View>
                     )}
                 />
@@ -381,7 +364,6 @@ const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: palette.bg, padding: 12 },
     h2: { color: palette.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
     h3: { color: palette.text, fontSize: 15, fontWeight: '700', marginTop: 10 },
-    label: { color: palette.dim, marginBottom: 6 },
     input: {
         backgroundColor: palette.inputBg,
         color: palette.text,
@@ -391,7 +373,6 @@ const styles = StyleSheet.create({
         padding: 10,
         marginBottom: 10,
     },
-    inputInline: { width: 80, paddingVertical: 6, marginLeft: 6 },
     row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginVertical: 4 },
     metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 },
     metric: { color: palette.text },
