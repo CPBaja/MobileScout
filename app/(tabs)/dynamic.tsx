@@ -312,7 +312,7 @@ export default function DynamicTab() {
                     </View>
                 </View>
                 <Text style={styles.statusText}>
-                    {useSAERunRate ? saeStatus : 'Manual mode: use queue buttons + +1 Completion'}
+                    {useSAERunRate ? saeStatus : 'Manual mode: use queue buttons and +1 Completion'}
                 </Text>
 
                 {/* Manual queue controls (restored) */}
@@ -325,7 +325,7 @@ export default function DynamicTab() {
 
                 <View style={styles.metrics}>
                     <Text style={styles.metric}>
-                        <Text style={styles.metricKey}>Run rate ({sourceLabel}):</Text> {rate.toFixed(2)} / min
+                        <Text style={styles.metricKey}>Run rate ({sourceLabel}):</Text> {rate.toFixed(2)} cars / min
                     </Text>
 
                     <Text style={styles.metric}>

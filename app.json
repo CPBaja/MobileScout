@@ -16,12 +16,18 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "updates": {
+      "url": "https://u.expo.dev/b229758d-7289-4c27-99c5-85fb2e83c899",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": "1.0.0",
     "ios": {
       "bundleIdentifier": "com.yourteam.cpbajascout",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera for scanning and photo features.",
-        "NSLocationWhenInUseUsageDescription": "This app uses your location to show your position on the map."
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show your position on the map.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -59,6 +65,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b229758d-7289-4c27-99c5-85fb2e83c899"
+      }
     }
   }
 }
