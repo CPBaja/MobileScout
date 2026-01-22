@@ -2,7 +2,7 @@ import AppHeader from '@/components/ui/AppHeader';
 import Card from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from "expo-file-system/legacy";
 import * as Updates from 'expo-updates';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
@@ -76,24 +76,17 @@ async function exportAllAsyncStorageToJson(): Promise<{ filename: string; bytes:
 }
 
 async function eraseAllLocalData() {
-    // 1) Clear AsyncStorage
     const keys = await AsyncStorage.getAllKeys();
 
-    // Optional: only wipe your app’s keys (safer if any libs store keys too)
-    // If you want “nuke everything”, remove the filter.
     const appKeys = keys.filter(k => k.startsWith('mobilescout:'));
     if (appKeys.length) {
         await AsyncStorage.multiRemove(appKeys);
     } else if (keys.length) {
-        // fallback: remove all if your keys don't use the prefix
         await AsyncStorage.multiRemove(keys);
     }
 
-    // Extra sweep
     await AsyncStorage.clear();
 
-    // 2) OPTIONAL: delete exported files we created (if any)
-    // This helps if you’re saving CSV/JSON bundles to the filesystem.
     const dirs = [FileSystem.documentDirectory, FileSystem.cacheDirectory].filter(Boolean) as string[];
     for (const dir of dirs) {
         try {
@@ -128,11 +121,14 @@ export default function SettingsTab() {
         await eraseAllLocalData();
         setStatus('All local data erased.');
 
+        if (Platform.OS === 'web') {
+            location.reload();
+            return;
+        }
+
         try {
-            // Works in production builds with expo-updates
             await Updates.reloadAsync();
         } catch {
-            // Works in dev (Expo Go / dev client)
             DevSettings.reload();
         }
     }
@@ -142,8 +138,6 @@ export default function SettingsTab() {
             'This will delete all locally saved data (pit logs, dynamic samples, queued exports, etc.). This cannot be undone.';
 
         if (Platform.OS === 'web') {
-            // Web confirm is reliable; Alert.alert is often not.
-            // eslint-disable-next-line no-alert
             const ok = confirm(`Erase all data?\n\n${msg}`);
             if (ok) void doErase();
             return;
