@@ -2,14 +2,28 @@ export type SAESeen = { carNo: string; firstSeenTs: string };
 
 const BASE = 'https://results.bajasae.net/Leaderboard.aspx?Event=';
 
-// Very lightweight parser that works even if the HTML changes a bit.
-// It looks for patterns like " 43 ... OK 3.928 " (as visible on the page text) :contentReference[oaicite:4]{index=4}
+/**
+ * Parses HTML content to extract car numbers that have completed results.
+ * 
+ * @param html - The HTML string to parse, typically containing race results
+ * @returns An array of car numbers (as strings) that have valid completion times
+ * 
+ * @example
+ * ```ts
+ * const html = '<html>1 43 School OK 3.928</html>';
+ * const cars = parseCarsWithResults(html);
+ * // returns ['43']
+ * ```
+ * 
+ * @remarks
+ * - Normalizes whitespace and strips HTML tags before parsing
+ * - Matches results in format: position, car number, school/team, "OK" status, and time
+ * - Only includes cars with finite, positive completion times
+ * - Returns results as unique car numbers using a Set internally
+ */
 export function parseCarsWithResults(html: string): string[] {
-    // Normalize whitespace so regex works on “pretty printed” HTML too
     const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
-    // Matches: "<pos> <carNo> <school/team...> OK <time>"
-    // Example from page text: "1 43 ... OK 3.928" :contentReference[oaicite:5]{index=5}
     const re = /\b(\d{1,3})\s+(\d{1,4})\s+.*?\s+OK\s+(\d+(?:\.\d+)?)\b/g;
 
     const cars = new Set<string>();
@@ -22,6 +36,13 @@ export function parseCarsWithResults(html: string): string[] {
     return [...cars];
 }
 
+/**
+ * Fetches and parses leaderboard cars for a given SAE event.
+ * @param eventCode - The SAE event code to fetch results for
+ * @param fetchUrl - Optional custom URL to fetch from. If not provided, uses the default BASE URL with encoded event code
+ * @returns A promise that resolves to the parsed cars with their results
+ * @throws {Error} Throws an error if the fetch request fails with a non-ok status
+ */
 export async function fetchLeaderboardCars(eventCode: string, fetchUrl?: string) {
     const url = fetchUrl ?? `${BASE}${encodeURIComponent(eventCode)}`;
     const res = await fetch(url);
@@ -31,8 +52,12 @@ export async function fetchLeaderboardCars(eventCode: string, fetchUrl?: string)
 }
 
 /**
- * Update the "seen cars" list by adding any newly-completed cars with a timestamp.
- * Returns: updatedSeen, newlyAddedCount
+ * Updates the list of seen cars by adding newly encountered cars and maintaining a bounded history.
+ * 
+ * @param existing - The array of previously seen cars with their first seen timestamps
+ * @param carsNow - The array of car numbers currently detected
+ * @param nowIso - The current timestamp in ISO 8601 format
+ * @returns An object containing the updated list of seen cars (limited to the most recent 500) and the count of newly added cars
  */
 export function updateSeenCars(
     existing: SAESeen[],

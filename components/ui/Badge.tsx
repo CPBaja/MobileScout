@@ -12,6 +12,12 @@ const styles = StyleSheet.create({
     txt: { color: '#fff', fontSize: 12, fontWeight: '600' },
 });
 
+/**
+ * A badge component that displays text in a pill-shaped container.
+ * @param props - The component props
+ * @param props.text - The text content to display in the badge
+ * @returns A memoized badge component
+ */
 export default memo(function Badge({ text }: { text: string }) {
     return (
         <View style={styles.pill}>

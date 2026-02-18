@@ -6,6 +6,15 @@ const palette = {
     border: '#30363d',
 };
 
+/**
+ * A flexible Card component that wraps content in a styled View container.
+ * 
+ * @param props - The component props
+ * @param props.style - Optional custom style overrides for the card
+ * @param props.children - The content to render inside the card
+ * @param props.rest - Additional View props to pass through
+ * @returns A View component with card styling applied
+ */
 export default function Card({ style, children, ...rest }: PropsWithChildren<ViewProps>) {
     return <View style={[styles.card, style]} {...rest}>{children}</View>;
 }
