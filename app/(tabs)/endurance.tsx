@@ -30,11 +30,18 @@ type Pit = { carNumber: string; direction: Direction; station: Station; timestam
 const CAR_INPUT_ACCESSORY = 'carNumberAccessory';
 const STORAGE_KEY_PITLOGS = 'mobilescout:pitlogs:v1';
 
-// Lazy “Done” toolbar, imported only on iOS (web-safe)
+
+/**
+ * Renders an input accessory view with a "Done" button for iOS platforms.
+ * This component provides a convenient way to dismiss the keyboard on iOS devices.
+ * On non-iOS platforms, it returns null.
+ *
+ * @param {Object} props - The component props
+ * @param {string} props.nativeID - The native ID for the InputAccessoryView, used to associate it with TextInput components
+ * @returns {React.ReactElement | null} An InputAccessoryView component with a Done button on iOS, or null on other platforms
+ */
 function DoneAccessory({ nativeID }: { nativeID: string }) {
     if (Platform.OS !== 'ios') return null;
-    // Lazy require keeps it out of web bundle
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { InputAccessoryView } = require('react-native');
     return (
         <InputAccessoryView nativeID={nativeID}>
@@ -46,11 +53,25 @@ function DoneAccessory({ nativeID }: { nativeID: string }) {
     );
 }
 
+/**
+ * Parses an ISO 8601 date string and returns a Date object.
+ * @param ts - The ISO 8601 formatted date string to parse
+ * @returns A Date object if the string is a valid ISO date, or null if the string is invalid
+ */
 function parseISO(ts: string) {
     const d = new Date(ts);
     return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Formats a duration in seconds into a human-readable string.
+ * @param totalSeconds - The total duration in seconds. Negative values are treated as 0.
+ * @returns A formatted duration string. Returns format "Xh XXm XXs" if hours > 0, otherwise "Xm XXs".
+ * @example
+ * fmtDuration(3661) // Returns "1h 01m 01s"
+ * fmtDuration(125) // Returns "2m 05s"
+ * fmtDuration(-5) // Returns "0m 00s"
+ */
 function fmtDuration(totalSeconds: number) {
     const s = Math.max(0, Math.floor(totalSeconds));
     const h = Math.floor(s / 3600);
@@ -60,7 +81,29 @@ function fmtDuration(totalSeconds: number) {
     return `${m}m ${sec.toString().padStart(2, '0')}s`;
 }
 
-// Core off-track logic: sum pit-in -> next pit-out; if open pit-in, count until now
+/**
+ * Computes off-track statistics for a specific car based on pit log entries.
+ * 
+ * Analyzes pit events (in/out) to determine if a car is currently off-track,
+ * how long it has been off-track in the current session, and total off-track time.
+ * 
+ * @param logs - Array of pit log entries containing car numbers, timestamps, and directions
+ * @param carNumber - The car number to analyze (will be trimmed)
+ * @param nowMs - Current time in milliseconds for calculating current off-track duration
+ * 
+ * @returns An object containing:
+ *   - `status`: 'OFF TRACK' or 'ON TRACK' string indicator
+ *   - `currentOffSeconds`: Duration of current off-track session in seconds (0 if on-track)
+ *   - `totalOffSeconds`: Total accumulated off-track time in seconds
+ *   - `lastIn`: Timestamp of the last pit-in event, or null if none
+ *   - `lastOut`: Timestamp of the last pit-out event, or null if none
+ * 
+ * @remarks
+ * - Empty or whitespace-only car numbers return a default "ON TRACK" status with zero times
+ * - Events are processed chronologically by timestamp
+ * - If a car has an unclosed pit-in event, it's considered currently off-track
+ * - Current off-track time is calculated from the last unclosed pit-in to `nowMs`
+ */
 function computeOffTrack(logs: Pit[], carNumber: string, nowMs: number) {
     const car = carNumber.trim();
     if (!car) {
@@ -113,16 +156,39 @@ function computeOffTrack(logs: Pit[], carNumber: string, nowMs: number) {
     };
 }
 
+/**
+ * EnduranceTab component for tracking pit events and calculating off-track duration for race cars.
+ * 
+ * This component manages:
+ * - Recording pit in/out events with car numbers and timestamps
+ * - Persisting pit logs to AsyncStorage with a 200-entry limit
+ * - Calculating total and current off-track duration for a selected car
+ * - Real-time duration updates via a 1-second interval timer
+ * - Platform-specific keyboard handling (iOS, Android, Web)
+ * 
+ * @component
+ * @returns {JSX.Element} A scrollable view containing:
+ *   - Car number input and pit in/out buttons
+ *   - Off-track calculation section with metrics (status, current/total off-time, last pit times)
+ *   - Recent pit events list with car number shortcuts
+ * 
+ * @example
+ * // Usage within a tab navigator
+ * <EnduranceTab />
+ * 
+ * @remarks
+ * - Logs are automatically synced to AsyncStorage on change
+ * - The component updates pit durations every second for active calculations
+ * - Car number lookup is case-insensitive (trimmed before storage)
+ * - Recent logs are limited to the 200 most recent entries
+ */
 export default function EnduranceTab() {
-    // car input for logging
     const [car, setCar] = useState('');
 
-    // ✅ separate input for off-track lookup (so you can check any car without overwriting log input)
     const [lookupCar, setLookupCar] = useState('');
 
     const [logs, setLogs] = useState<Pit[]>([]);
 
-    // live “now” tick for active off-track updates
     const [nowMs, setNowMs] = useState(() => Date.now());
 
     // hydrate pit logs on mount

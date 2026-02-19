@@ -1,6 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
+/**
+ * Displays an overlay informing the user that the application is currently offline.
+ * Changes made while offline are saved locally and will automatically sync once connectivity is restored.
+ * 
+ * @component
+ * @returns {JSX.Element} A View component containing an offline notification card with title and message text.
+ */
 export default function OfflineOverlay() {
     return (
         <View style={styles.root}>

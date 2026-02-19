@@ -2,6 +2,20 @@ import React, { useState } from 'react';
 import { Button, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import EventSelector from '../ui/EventSelector';
 
+/**
+ * Screen component for managing pit log entries in MobileScout.
+ * 
+ * Allows users to input a car number, select an event from a predefined list,
+ * and log pit in/out actions. The component maintains state for both the car number
+ * and selected event name, and logs the action data when pit buttons are pressed.
+ * 
+ * @component
+ * @returns {React.ReactElement} A scrollable view containing a car number input,
+ *                                event selector dropdown, and pit in/out buttons.
+ * 
+ * @example
+ * return <PitLogsScreen />;
+ */
 export default function PitLogsScreen() {
     const [carNumber, setCarNumber] = useState('');
     const [eventName, setEventName] = useState(''); // ← controlled by the dropdown

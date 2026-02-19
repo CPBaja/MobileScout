@@ -40,6 +40,22 @@ const SAE_PROXY_BASE =
     | undefined;
 const SAE_FRESH_WINDOW_MS = 60 * 1000;
 
+/**
+ * Parses HTML content to extract car numbers that have valid results.
+ * 
+ * @param html - The HTML string to parse. HTML tags are stripped and whitespace is normalized.
+ * @returns An array of unique car numbers (as strings) that have valid results with positive time values.
+ * 
+ * @remarks
+ * The function searches for patterns matching: number, car number, optional text, "OK", and a positive time value.
+ * Only car numbers with finite and positive time values are included in the result.
+ * Results are deduplicated using a Set.
+ * 
+ * @example
+ * const html = '<div>123 456 Race OK 12.5</div>';
+ * const cars = parseCarsWithResults(html);
+ * // Returns: ['456']
+ */
 function parseCarsWithResults(html: string): string[] {
     const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
     const re = /\b(\d{1,3})\s+(\d{1,4})\s+.*?\s+OK\s+(\d+(?:\.\d+)?)\b/g;
@@ -54,6 +70,22 @@ function parseCarsWithResults(html: string): string[] {
     return [...cars];
 }
 
+/**
+ * Parses the "Last Data Update" timestamp from HTML content.
+ * 
+ * Extracts and converts a date-time string in the format "MM/DD/YYYY HH:MM:SS AM/PM"
+ * from the provided HTML, removing all tags and normalizing whitespace.
+ * 
+ * @param html - The HTML string to parse for the last data update timestamp
+ * @returns An object containing the timestamp in milliseconds and the raw formatted string,
+ *          or null if the timestamp pattern is not found or parsing fails
+ * @returns {number} ms - Unix timestamp in milliseconds (local time)
+ * @returns {string} raw - The original formatted timestamp string (e.g., "12/25/2023 03:45:30 PM")
+ * 
+ * @example
+ * const result = parseLastDataUpdate('<p>Last Data Update: 12/25/2023 03:45:30 PM</p>');
+ * // Returns: { ms: 1703505930000, raw: "12/25/2023 03:45:30 PM" }
+ */
 function parseLastDataUpdate(html: string): { ms: number; raw: string } | null {
     const text = html
         .replace(/<[^>]*>/g, ' ')
@@ -93,7 +125,12 @@ function parseLastDataUpdate(html: string): { ms: number; raw: string } | null {
     return { ms, raw: `${datePart} ${timePart} ${ampm}` };
 }
 
-// Existing “new cars seen recently” method (fallback only)
+/**
+ * Determines whether a recently seen car has been observed within the freshness window.
+ * @param seen - Array of SAESeen objects to check
+ * @param nowMs - Current timestamp in milliseconds
+ * @returns True if any car in the seen array was first observed within the freshness window, false otherwise
+ */
 function hasRecentNewCarSeen(seen: SAESeen[], nowMs: number) {
     return seen.some((s) => {
         const t = new Date(s.firstSeenTs).getTime();
@@ -101,7 +138,20 @@ function hasRecentNewCarSeen(seen: SAESeen[], nowMs: number) {
     });
 }
 
-// Fetch raw HTML with web+native proxy fallback, then parse cars + lastUpdate
+/**
+ * Fetches the leaderboard HTML content for a given event code.
+ * 
+ * @param eventCode - The event code to fetch the leaderboard for.
+ * @returns A promise that resolves to the HTML content of the leaderboard.
+ * @throws {Error} If the fetch fails and no fallback URL is available, or if both primary and fallback URLs fail.
+ * 
+ * @remarks
+ * This function attempts to fetch leaderboard data with platform-specific URL preference:
+ * - **Web**: Prefers proxy URL (to avoid CORS issues), falls back to direct URL
+ * - **Native**: Prefers direct URL, falls back to proxy URL if available
+ * 
+ * The fetch is configured with `cache: 'no-store'` to ensure fresh data is retrieved.
+ */
 async function fetchLeaderboardHtml(eventCode: string): Promise<string> {
     const directUrl = `${SAE_BASE}${encodeURIComponent(eventCode)}`;
     const proxyUrl = SAE_PROXY_BASE ? `${SAE_PROXY_BASE}${encodeURIComponent(eventCode)}` : undefined;
@@ -124,6 +174,13 @@ async function fetchLeaderboardHtml(eventCode: string): Promise<string> {
     }
 }
 
+/**
+ * Updates the list of seen cars by adding new cars and maintaining a maximum history.
+ * @param existing - The existing array of seen cars with their first seen timestamps
+ * @param carsNow - The array of car numbers currently detected
+ * @param nowIso - The current timestamp in ISO format
+ * @returns A new array of seen cars with newly detected cars prepended, limited to 800 entries
+ */
 function updateSeenCars(existing: SAESeen[], carsNow: string[], nowIso: string) {
     const seenSet = new Set(existing.map((x) => x.carNo));
     const additions: SAESeen[] = [];
@@ -138,6 +195,36 @@ function updateSeenCars(existing: SAESeen[], carsNow: string[], nowIso: string) 
     return [...additions, ...existing].slice(0, 800);
 }
 
+/**
+ * DynamicTab Component
+ *
+ * A comprehensive run-rate tracking interface for monitoring queue progression and completion rates.
+ * Supports dual modes: SAE (Society of Automotive Engineers) leaderboard-based tracking and manual queue management.
+ *
+ * @component
+ *
+ * @returns {JSX.Element} The rendered dynamic tracking tab with event selection, queue controls, and metrics.
+ *
+ * @remarks
+ * - **SAE Mode**: Automatically polls SAE leaderboard for selected event, tracking new car results and calculating run rates based on actual submissions.
+ * - **Manual Mode**: Allows manual queue input with completion tracking to derive run rates and ETAs.
+ * - **Dual State Management**: Maintains separate state for SAE ("seen" cars, last update times) and manual mode (start timestamp).
+ * - **Real-time Updates**: Uses a 1-second ticker to smoothly update elapsed time metrics.
+ * - **Event Isolation**: Resets all tracking state when event selection changes to prevent metric contamination.
+ * - **Freshness Heuristics**: Employs dual validation (timestamp-based and fallback) to determine data freshness.
+ * - **Activity Log**: Displays recent snapshots, completions, and SAE results in reverse chronological order.
+ *
+ * @example
+ * ```tsx
+ * <DynamicTab />
+ * ```
+ *
+ * @see {@link SAE_EVENT_CODE} - Event code mapping for SAE leaderboard URLs
+ * @see {@link SAE_FRESH_WINDOW_MS} - Freshness window for SAE data validation
+ * @see {@link LineSample} - Queue snapshot data structure
+ * @see {@link Completion} - Completion record structure
+ * @see {@link SAESeen} - SAE car result tracking structure
+ */
 export default function DynamicTab() {
     const isOnline = useOnline();
 

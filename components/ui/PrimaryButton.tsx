@@ -2,6 +2,15 @@ import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 
 const palette = { bg: '#161b22', border: '#30363d', text: '#fff' };
 
+/**
+ * A reusable primary button component for user interactions.
+ * @param {Object} props - The component props
+ * @param {string} props.title - The text label displayed on the button
+ * @param {() => void} [props.onPress] - Optional callback function triggered when the button is pressed
+ * @param {boolean} [props.danger] - Optional flag to apply danger styling (typically red/warning colors)
+ * @param {ViewStyle} [props.style] - Optional custom style overrides for the button container
+ * @returns {JSX.Element} A pressable button element with text content
+ */
 export default function PrimaryButton({
     title,
     onPress,

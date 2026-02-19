@@ -10,6 +10,20 @@ type Props = {
 
 const OPTIONS = ['Acceleration', 'Stability', 'Suspension'];
 
+/**
+ * A dropdown selector component for choosing an event.
+ * 
+ * @component
+ * @example
+ * const [event, setEvent] = useState('');
+ * return <EventSelector value={event} onChange={setEvent} label="Select an event" />
+ * 
+ * @param {Props} props - The component props
+ * @param {string} props.value - The currently selected event value
+ * @param {(value: string) => void} props.onChange - Callback fired when the selected event changes
+ * @param {string} [props.label='Event name'] - The label displayed above the dropdown. Defaults to 'Event name'
+ * @returns {React.ReactElement} A picker component wrapped in a labeled container
+ */
 export default function EventSelector({ value, onChange, label = 'Event name' }: Props) {
     return (
         <View style={styles.container}>
