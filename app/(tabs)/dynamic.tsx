@@ -2,9 +2,20 @@ import AppHeader from '@/components/ui/AppHeader';
 import Card from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View, Switch, Platform, Alert } from 'react-native';
+import {
+    Alert,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useOnline } from '@/offline/OnlineProvider';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+
 
 const palette = {
     bg: '#0b0b0c',
@@ -14,6 +25,7 @@ const palette = {
     border: '#30363d',
     listBg: '#11161d',
     success: '#238636',
+    danger: '#b91c1c',
 };
 
 type LineSample = {
@@ -40,17 +52,19 @@ const SAE_PROXY_BASE =
     | undefined;
 const SAE_FRESH_WINDOW_MS = 60 * 1000;
 
+const dropdownListMode = 'SCROLLVIEW';
+
 /**
  * Parses HTML content to extract car numbers that have valid results.
- * 
+ *
  * @param html - The HTML string to parse. HTML tags are stripped and whitespace is normalized.
  * @returns An array of unique car numbers (as strings) that have valid results with positive time values.
- * 
+ *
  * @remarks
  * The function searches for patterns matching: number, car number, optional text, "OK", and a positive time value.
  * Only car numbers with finite and positive time values are included in the result.
  * Results are deduplicated using a Set.
- * 
+ *
  * @example
  * const html = '<div>123 456 Race OK 12.5</div>';
  * const cars = parseCarsWithResults(html);
@@ -72,16 +86,16 @@ function parseCarsWithResults(html: string): string[] {
 
 /**
  * Parses the "Last Data Update" timestamp from HTML content.
- * 
+ *
  * Extracts and converts a date-time string in the format "MM/DD/YYYY HH:MM:SS AM/PM"
  * from the provided HTML, removing all tags and normalizing whitespace.
- * 
+ *
  * @param html - The HTML string to parse for the last data update timestamp
  * @returns An object containing the timestamp in milliseconds and the raw formatted string,
  *          or null if the timestamp pattern is not found or parsing fails
  * @returns {number} ms - Unix timestamp in milliseconds (local time)
  * @returns {string} raw - The original formatted timestamp string (e.g., "12/25/2023 03:45:30 PM")
- * 
+ *
  * @example
  * const result = parseLastDataUpdate('<p>Last Data Update: 12/25/2023 03:45:30 PM</p>');
  * // Returns: { ms: 1703505930000, raw: "12/25/2023 03:45:30 PM" }
@@ -140,16 +154,16 @@ function hasRecentNewCarSeen(seen: SAESeen[], nowMs: number) {
 
 /**
  * Fetches the leaderboard HTML content for a given event code.
- * 
+ *
  * @param eventCode - The event code to fetch the leaderboard for.
  * @returns A promise that resolves to the HTML content of the leaderboard.
  * @throws {Error} If the fetch fails and no fallback URL is available, or if both primary and fallback URLs fail.
- * 
+ *
  * @remarks
  * This function attempts to fetch leaderboard data with platform-specific URL preference:
  * - **Web**: Prefers proxy URL (to avoid CORS issues), falls back to direct URL
  * - **Native**: Prefers direct URL, falls back to proxy URL if available
- * 
+ *
  * The fetch is configured with `cache: 'no-store'` to ensure fresh data is retrieved.
  */
 async function fetchLeaderboardHtml(eventCode: string): Promise<string> {
@@ -399,6 +413,82 @@ export default function DynamicTab() {
         setSamples((prev) => [entry, ...prev].slice(0, 50));
     }
 
+    function csvEscape(value: unknown) {
+        const s = String(value ?? '');
+        // Escape quotes and wrap if needed
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+    }
+
+    function buildLineSamplesCsv(rows: LineSample[]) {
+        const header = ['eventName', 'timestamp', 'lineLength', 'runRate', 'etaMinutes'];
+        const lines = [
+            header.join(','),
+            ...rows.map((r) =>
+                [
+                    csvEscape(r.eventName),
+                    csvEscape(r.timestamp),
+                    csvEscape(r.lineLength),
+                    csvEscape(r.runRate),
+                    csvEscape(r.etaMinutes ?? ''),
+                ].join(',')
+            ),
+        ];
+        return lines.join('\r\n') + '\r\n';
+    }
+
+    async function exportLineSamplesCsv() {
+        if (samples.length === 0) {
+            Alert.alert('Nothing to export', 'Take at least one snapshot first.');
+            return;
+        }
+
+        try {
+            const csv = buildLineSamplesCsv(samples);
+
+            // Web: trigger download via Blob
+            if (Platform.OS === 'web') {
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+
+                const safeEvent = (eventName || 'Event').replace(/[^a-z0-9-_]+/gi, '_');
+                const filename = `LineSamples_${safeEvent}_${Date.now()}.csv`;
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            // Native: write file then share
+            const safeEvent = (eventName || 'Event').replace(/[^a-z0-9-_]+/gi, '_');
+            const filename = `LineSamples_${safeEvent}_${Date.now()}.csv`;
+            const uri = `${FileSystem.cacheDirectory}${filename}`;
+
+            await FileSystem.writeAsStringAsync(uri, csv, {
+                encoding: FileSystem.EncodingType.UTF8,
+            });
+
+            const canShare = await Sharing.isAvailableAsync();
+            if (!canShare) {
+                Alert.alert('Export created', `Saved to:\n${uri}`);
+                return;
+            }
+
+            await Sharing.shareAsync(uri, {
+                mimeType: 'text/csv',
+                dialogTitle: 'Export Line Samples CSV',
+                UTI: 'public.comma-separated-values-text',
+            });
+        } catch (err: any) {
+            Alert.alert('Export failed', err?.message ?? 'Unknown error');
+        }
+    }
+
+
     const saeIsFresh = useMemo(() => {
         if (!useSAERunRate || !isOnline || !SAE_EVENT_CODE[eventName]) return false;
         if (saeLastUpdateMs == null) {
@@ -463,112 +553,317 @@ export default function DynamicTab() {
 
     const currentLine = Number(lineLength) || 0;
 
+    const manualCompletionsForEvent = useMemo(() => {
+        const e = eventName.trim() || 'Event';
+        return completions.filter((c) => c.eventName.trim() === e);
+    }, [completions, eventName]);
+
+    const manualCompletionCount = manualCompletionsForEvent.length;
+
+    function undoCompletion() {
+        const e = requireEventOrAlert();
+        if (!e) return;
+
+        setCompletions((prev) => {
+            const idx = prev.findIndex((c) => c.eventName.trim() === e);
+            if (idx < 0) return prev;
+
+            const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+
+            // Recompute manual session start for this event (oldest completion timestamp).
+            const remainingForEvent = next.filter((c) => c.eventName.trim() === e);
+            if (remainingForEvent.length === 0) {
+                setManualStartTs(null);
+            } else {
+                const oldest = remainingForEvent
+                    .map((c) => new Date(c.timestamp).getTime())
+                    .filter((t) => Number.isFinite(t))
+                    .sort((a, b) => a - b)[0];
+                setManualStartTs(new Date(oldest).toISOString());
+            }
+
+            return next;
+        });
+
+        // Undo should also return one car back into the queue.
+        setLineLength((prev) => String((Number(prev) || 0) + 1));
+    }
+
     return (
         <View style={styles.screen}>
             <AppHeader />
-            <Card>
-                <Text style={styles.h2}>Event</Text>
 
-                <View style={{ zIndex: 1000 }}>
-                    <DropDownPicker
-                        open={open}
-                        value={eventName}
-                        items={items}
-                        setOpen={setOpen}
-                        setValue={(cb) => setEventName(cb(eventName))}
-                        setItems={setItems}
-                        style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}
-                        dropDownContainerStyle={{ backgroundColor: '#11161d', borderColor: '#30363d' }}
-                        listItemLabelStyle={{ color: '#238636' }}
-                        textStyle={{ color: '#238636' }}
-                        placeholder="Select event..."
-                        placeholderStyle={{ color: '#c9d1d9' }}
-                        ArrowDownIconComponent={() => <Text style={{ color: '#238636', fontSize: 14 }}>▼</Text>}
-                        ArrowUpIconComponent={() => <Text style={{ color: '#238636', fontSize: 14 }}>▲</Text>}
-                        theme="DARK"
-                    />
-                </View>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Context */}
+                <Card>
+                    <Text style={styles.sectionTitle}>Event</Text>
 
-                <Text style={[styles.metric, { marginTop: 8 }]}>
-                    <Text style={styles.metricKey}>Current line of cars: </Text>
-                    {currentLine}
-                </Text>
-
-                {/* SAE toggle + status */}
-                <View style={styles.row}>
-                    <View style={styles.toggleRow}>
-                        <Text style={styles.toggleLabel}>Run rate source: </Text>
-                        <Text style={[styles.toggleLabel, { color: useSAERunRate ? palette.success : palette.dim }]}>
-                            {useSAERunRate ? 'SAE' : 'Manual'}
-                        </Text>
-                        <Switch value={useSAERunRate} onValueChange={setUseSAERunRate} />
+                    <View style={ styles.dropdownWrap}>
+                        <DropDownPicker
+                            open={open}
+                            value={eventName}
+                            items={items}
+                            setOpen={setOpen}
+                            setValue={(cb) => setEventName(cb(eventName))}
+                            setItems={setItems}
+                            style={{ backgroundColor: palette.inputBg, borderColor: palette.border }}
+                            dropDownContainerStyle={{ backgroundColor: palette.listBg, borderColor: palette.border }}
+                            listItemLabelStyle={{ color: palette.success }}
+                            textStyle={{ color: palette.success }}
+                            placeholder="Select event..."
+                            placeholderStyle={{ color: palette.dim }}
+                            ArrowDownIconComponent={() => <Text style={{ color: palette.success, fontSize: 14 }}>▼</Text>}
+                            ArrowUpIconComponent={() => <Text style={{ color: palette.success, fontSize: 14 }}>▲</Text>}
+                            theme="DARK"
+                            listMode={dropdownListMode as any}
+                            dropDownDirection="BOTTOM"
+                            maxHeight={220}
+                            closeAfterSelecting={true}
+                            scrollViewProps={{ nestedScrollEnabled: true }}
+                            zIndex={3000}
+                            zIndexInverse={1000}
+                        />
                     </View>
-                </View>
 
-                <Text style={styles.statusText}>
-                    {useSAERunRate ? saeStatus : 'Manual mode: use queue buttons and +1 Completion'}
-                </Text>
+                    <View style={styles.contextRow}>
+                        <Text style={styles.contextLabel}>SAE / Manual</Text>
 
-                {/* Optional: show last update parsed */}
-                {useSAERunRate && !!saeLastUpdateRaw && (
-                    <Text style={[styles.statusText, { marginTop: -2 }]}>
-                        Last Data Update (site): {saeLastUpdateRaw}
+                        <View style={styles.segment}>
+                            <Pressable
+                                onPress={() => setUseSAERunRate(true)}
+                                style={({ pressed }) => [
+                                    styles.segmentBtn,
+                                    useSAERunRate && styles.segmentBtnActive,
+                                    pressed && styles.segmentBtnPressed,
+                                ]}
+                                hitSlop={8}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: useSAERunRate }}
+                                accessibilityLabel="Use SAE mode"
+                            >
+                                <Text style={[styles.segmentText, useSAERunRate && styles.segmentTextActive]}>SAE</Text>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={() => setUseSAERunRate(false)}
+                                style={({ pressed }) => [
+                                    styles.segmentBtn,
+                                    !useSAERunRate && styles.segmentBtnActive,
+                                    pressed && styles.segmentBtnPressed,
+                                ]}
+                                hitSlop={8}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: !useSAERunRate }}
+                                accessibilityLabel="Use Manual mode"
+                            >
+                                <Text style={[styles.segmentText, !useSAERunRate && styles.segmentTextActive]}>Manual</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+
+
+                    <Text style={styles.statusText}>
+                        {useSAERunRate ? saeStatus : 'Manual mode: use completion controls'}
                     </Text>
-                )}
+                    {useSAERunRate && !!saeLastUpdateRaw && (
+                        <Text style={[styles.statusText, { marginTop: 2 }]}>
+                            Last Data Update (site): {saeLastUpdateRaw}
+                        </Text>
+                    )}
+                </Card>
 
-                {/* Manual queue controls */}
-                <View style={styles.row}>
-                    <PrimaryButton title="+1 Car in Line" onPress={incrementLine} />
-                    <PrimaryButton title="Remove from Queue" onPress={decrementLine} />
-                    <PrimaryButton title="Snapshot Line Length" onPress={snapshot} />
-                    <PrimaryButton title="+1 Completion" onPress={plusOne} />
-                </View>
+                {/* Operations */}
+                <Card>
+                    <View style={styles.twoColHeader}>
+                        <Text style={styles.colTitle}>Queue</Text>
+                        <Text style={styles.colTitle}>Completions</Text>
+                    </View>
 
-                <View style={styles.metrics}>
-                    <Text style={styles.metric}>
-                        <Text style={styles.metricKey}>Run rate ({sourceLabel}):</Text> {rate.toFixed(2)} cars / min
-                    </Text>
+                    <View style={styles.twoCol}>
+                        {/* Queue */}
+                        <View style={styles.col}>
+                            <RoundButton label="+" variant="primary" onPress={incrementLine} />
+                            <View style={styles.valuePill}>
+                                <Text style={styles.valueLabel}>Cars in line</Text>
+                                <Text style={styles.valueNumber}>{currentLine}</Text>
+                            </View>
+                            <RoundButton label="−" variant="danger" onPress={decrementLine} />
+                        </View>
 
-                    <Text style={styles.metric}>
-                        <Text style={styles.metricKey}>ETA:</Text> {eta && isFinite(eta) ? eta.toFixed(1) : '–'} minutes
-                    </Text>
+                        {/* Completions */}
+                        <View style={styles.col}>
+                            <RoundButton
+                                label="+"
+                                variant={useSAERunRate ? 'disabled' : 'primary'}
+                                onPress={useSAERunRate ? undefined : plusOne}
+                            />
+                            <View style={styles.valuePill}>
+                                <Text style={styles.valueLabel}>Manual total</Text>
+                                <Text style={styles.valueNumber}>{manualCompletionCount}</Text>
+                            </View>
+                            <RoundButton
+                                label="−"
+                                variant={useSAERunRate ? 'disabled' : 'danger'}
+                                onPress={useSAERunRate ? undefined : undoCompletion}
+                            />
+                        </View>
+                    </View>
 
-                    <Text style={styles.metric}>
-                        <Text style={styles.metricKey}>Total completions:</Text> {count}
-                    </Text>
-                </View>
+                    {useSAERunRate && (
+                        <Text style={styles.helperText}>
+                            SAE rate is derived from leaderboard updates.
+                        </Text>
+                    )}
+                </Card>
 
-                <View style={styles.row}>
-                    <PrimaryButton title="Export LineSamples CSV" onPress={() => { }} />
-                </View>
+                {/* Metrics */}
+                <Card>
+                    <Text style={styles.sectionTitle}>Metrics</Text>
+                    <View style={styles.metricRow}>
+                        <Text style={styles.metricKey}>Run Rate ({sourceLabel})</Text>
+                        <Text style={styles.metricVal}>{rate.toFixed(2)} cars / min</Text>
+                    </View>
+                    <View style={styles.metricRow}>
+                        <Text style={styles.metricKey}>ETA</Text>
+                        <Text style={styles.metricVal}>{eta && isFinite(eta) ? eta.toFixed(1) : '–'} minutes</Text>
+                    </View>
+                    <View style={[styles.metricRow, { marginBottom: 0 }]}>
+                        <Text style={styles.metricKey}>Total Completions ({sourceLabel})</Text>
+                        <Text style={styles.metricVal}>{count}</Text>
+                    </View>
+                </Card>
 
-                <Text style={styles.h3}>Recent activity</Text>
-                <FlatList
-                    data={recent}
-                    keyExtractor={(i, idx) => i.ts + idx}
-                    contentContainerStyle={{ gap: 8 }}
-                    keyboardShouldPersistTaps="always"
-                    renderItem={({ item }) => (
-                        <View style={styles.listItem}>
-                            <Text style={styles.itemText}>
-                                {new Date(item.ts).toLocaleString()} — {item.text}
-                            </Text>
+                {/* Utilities */}
+                <Card>
+                    <Text style={styles.sectionTitle}>Utilities</Text>
+                    <PrimaryButton title="Snapshot Line Length" onPress={snapshot} style={{ width: '100%' }} />
+                    <View style={{ height: 10 }} />
+                    <PrimaryButton title="Export Line Samples CSV" onPress={exportLineSamplesCsv} style={{ width: '100%' }} />
+                </Card>
+
+                {/* Recent */}
+                <Card>
+                    <Text style={styles.sectionTitle}>Recent Activity</Text>
+                    {recent.length === 0 ? (
+                        <Text style={styles.emptyText}>No activity yet.</Text>
+                    ) : (
+                        <View style={{ gap: 8 }}>
+                            {recent.map((item, idx) => (
+                                <View key={item.ts + idx} style={styles.listItem}>
+                                    <Text style={styles.itemText}>
+                                        {new Date(item.ts).toLocaleString()} — {item.text}
+                                    </Text>
+                                </View>
+                            ))}
                         </View>
                     )}
-                />
-            </Card>
+                </Card>
+            </ScrollView>
         </View>
     );
 }
 
+function RoundButton({
+    label,
+    variant,
+    onPress,
+}: {
+    label: string;
+    variant: 'primary' | 'danger' | 'disabled';
+    onPress?: () => void;
+}) {
+    const isDisabled = variant === 'disabled' || !onPress;
+    return (
+        <Pressable
+            onPress={onPress}
+            disabled={isDisabled}
+            style={({ pressed }) => [
+                styles.roundBtn,
+                variant === 'primary' && styles.roundBtnPrimary,
+                variant === 'danger' && styles.roundBtnDanger,
+                isDisabled && styles.roundBtnDisabled,
+                pressed && !isDisabled && styles.roundBtnPressed,
+            ]}
+        >
+            <Text style={styles.roundBtnText}>{label}</Text>
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: palette.bg, padding: 12 },
-    h2: { color: palette.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
-    h3: { color: palette.text, fontSize: 15, fontWeight: '700', marginTop: 10 },
-    row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginVertical: 4 },
-    metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 },
-    metric: { color: palette.text },
-    metricKey: { fontWeight: '700' },
+    screen: { flex: 1, backgroundColor: palette.bg, paddingHorizontal: 12, paddingTop: 12 },
+    scrollContent: { paddingBottom: 24 },
+
+    sectionTitle: { color: palette.text, fontSize: 16, fontWeight: '800', marginBottom: 10 },
+
+    contextRow: {
+        marginTop: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 10,
+    },
+    contextLabel: { color: palette.text, fontWeight: '800' },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    togglePill: {
+        color: palette.dim,
+        fontWeight: '800',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.inputBg,
+        overflow: 'hidden',
+    },
+    togglePillActive: {
+        color: palette.text,
+        borderColor: palette.success,
+    },
+    statusText: { color: palette.dim, marginTop: 8 },
+
+    twoColHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+    colTitle: { color: palette.text, fontSize: 16, fontWeight: '800' },
+    twoCol: { flexDirection: 'row', gap: 14 },
+    col: {
+        flex: 1,
+        alignItems: 'center',
+        gap: 10,
+        padding: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: 'rgba(255,255,255,0.02)',
+    },
+    valuePill: {
+        width: '100%',
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.inputBg,
+        alignItems: 'center',
+        gap: 2,
+    },
+    valueLabel: { color: palette.dim, fontWeight: '700', fontSize: 12 },
+    valueNumber: { color: palette.text, fontWeight: '900', fontSize: 22 },
+    helperText: { color: palette.dim, marginTop: 10, lineHeight: 18 },
+
+    metricRow: {
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.inputBg,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+    },
+    metricKey: { color: palette.dim, fontWeight: '700' },
+    metricVal: { color: palette.text, fontWeight: '900', fontSize: 16, marginTop: 4 },
+
     listItem: {
         backgroundColor: palette.listBg,
         borderColor: palette.border,
@@ -577,7 +872,61 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     itemText: { color: palette.text },
-    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    toggleLabel: { color: palette.text, fontWeight: '700' },
-    statusText: { color: palette.dim, marginTop: 4, marginBottom: 6 },
+
+    emptyText: { color: palette.dim },
+
+    roundBtn: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.inputBg,
+    },
+    roundBtnPrimary: { borderColor: palette.success, backgroundColor: 'rgba(35, 134, 54, 0.25)' },
+    roundBtnDanger: { borderColor: palette.danger, backgroundColor: 'rgba(185, 28, 28, 0.22)' },
+    roundBtnDisabled: { opacity: 0.45 },
+    roundBtnPressed: { transform: [{ scale: 0.98 }] },
+    roundBtnText: { color: palette.text, fontWeight: '900', fontSize: 24, marginTop: -2 },
+    segment: {
+        flexDirection: 'row',
+        padding: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.inputBg,
+        gap: 6,
+    },
+    segmentBtn: {
+        minWidth: 96,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    segmentBtnActive: {
+        borderColor: palette.success,
+        backgroundColor: 'rgba(35, 134, 54, 0.22)',
+    },
+    segmentBtnPressed: {
+        transform: [{ scale: 0.99 }],
+    },
+    segmentText: {
+        color: palette.dim,
+        fontWeight: '900',
+        fontSize: 16,
+    },
+    segmentTextActive: {
+        color: palette.text,
+    },
+    dropdownWrap: {
+        zIndex: 3000,
+        elevation: 30,
+    },
+
 });
