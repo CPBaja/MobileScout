@@ -1,6 +1,7 @@
 import AppHeader from '@/components/ui/AppHeader';
 import Card from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
+import RoundButton from '@/components/ui/RoundButton';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
@@ -389,6 +390,12 @@ export default function DynamicTab() {
         const e = requireEventOrAlert();
         if (!e) return;
 
+        const current = Number(lineLength) || 0;
+        if (current <= 0) {
+            Alert.alert('Queue empty', 'Add a car to the queue before recording a completion.');
+            return;
+        }
+
         const ts = new Date().toISOString();
         setCompletions((prev) => [{ eventName: e, timestamp: ts }, ...prev]);
 
@@ -553,12 +560,18 @@ export default function DynamicTab() {
 
     const currentLine = Number(lineLength) || 0;
 
+    const canDecrementQueue = currentLine > 0;
+
     const manualCompletionsForEvent = useMemo(() => {
         const e = eventName.trim() || 'Event';
         return completions.filter((c) => c.eventName.trim() === e);
     }, [completions, eventName]);
 
     const manualCompletionCount = manualCompletionsForEvent.length;
+
+    const canUndoCompletion = !useSAERunRate && manualCompletionCount > 0;
+
+    const canAddCompletion = !useSAERunRate && currentLine > 0;
 
     function undoCompletion() {
         const e = requireEventOrAlert();
@@ -667,7 +680,7 @@ export default function DynamicTab() {
 
 
                     <Text style={styles.statusText}>
-                        {useSAERunRate ? saeStatus : 'Manual mode: use completion controls'}
+                        {useSAERunRate ? saeStatus : 'Manual mode: use controls below'}
                     </Text>
                     {useSAERunRate && !!saeLastUpdateRaw && (
                         <Text style={[styles.statusText, { marginTop: 2 }]}>
@@ -691,15 +704,19 @@ export default function DynamicTab() {
                                 <Text style={styles.valueLabel}>Cars in line</Text>
                                 <Text style={styles.valueNumber}>{currentLine}</Text>
                             </View>
-                            <RoundButton label="−" variant="danger" onPress={decrementLine} />
+                            <RoundButton
+                                label="−"
+                                variant={canDecrementQueue ? 'danger' : 'disabled'}
+                                onPress={canDecrementQueue ? decrementLine : undefined}
+                            />
                         </View>
 
                         {/* Completions */}
                         <View style={styles.col}>
                             <RoundButton
                                 label="+"
-                                variant={useSAERunRate ? 'disabled' : 'primary'}
-                                onPress={useSAERunRate ? undefined : plusOne}
+                                variant={canAddCompletion ? 'primary' : 'disabled'}
+                                onPress={canAddCompletion ? plusOne : undefined}
                             />
                             <View style={styles.valuePill}>
                                 <Text style={styles.valueLabel}>Manual total</Text>
@@ -707,8 +724,8 @@ export default function DynamicTab() {
                             </View>
                             <RoundButton
                                 label="−"
-                                variant={useSAERunRate ? 'disabled' : 'danger'}
-                                onPress={useSAERunRate ? undefined : undoCompletion}
+                                variant={canUndoCompletion ? 'danger' : 'disabled'}
+                                onPress={canUndoCompletion ? undoCompletion : undefined}
                             />
                         </View>
                     </View>
@@ -764,33 +781,6 @@ export default function DynamicTab() {
                 </Card>
             </ScrollView>
         </View>
-    );
-}
-
-function RoundButton({
-    label,
-    variant,
-    onPress,
-}: {
-    label: string;
-    variant: 'primary' | 'danger' | 'disabled';
-    onPress?: () => void;
-}) {
-    const isDisabled = variant === 'disabled' || !onPress;
-    return (
-        <Pressable
-            onPress={onPress}
-            disabled={isDisabled}
-            style={({ pressed }) => [
-                styles.roundBtn,
-                variant === 'primary' && styles.roundBtnPrimary,
-                variant === 'danger' && styles.roundBtnDanger,
-                isDisabled && styles.roundBtnDisabled,
-                pressed && !isDisabled && styles.roundBtnPressed,
-            ]}
-        >
-            <Text style={styles.roundBtnText}>{label}</Text>
-        </Pressable>
     );
 }
 
