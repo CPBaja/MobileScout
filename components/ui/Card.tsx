@@ -30,5 +30,6 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 3,
         marginBottom: 16,
+        overflow: 'visible'
     },
 });
