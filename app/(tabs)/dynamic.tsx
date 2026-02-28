@@ -56,6 +56,21 @@ const SAE_FRESH_WINDOW_MS = 60 * 1000;
 const dropdownListMode = 'SCROLLVIEW';
 
 /**
+ * Exports utility functions for parsing and managing car data with results.
+ * 
+ * @exports parseCarsWithResults - Parses cars data and their associated results
+ * @exports parseLastDataUpdate - Parses the timestamp of the last data update
+ * @exports hasRecentNewCarSeen - Checks if a new car has been recently observed
+ * @exports updateSeenCars - Updates the collection of cars that have been seen
+ */
+export {
+    parseCarsWithResults,
+    parseLastDataUpdate,
+    hasRecentNewCarSeen,
+    updateSeenCars,
+};
+
+/**
  * Parses HTML content to extract car numbers that have valid results.
  *
  * @param html - The HTML string to parse. HTML tags are stripped and whitespace is normalized.
@@ -625,8 +640,8 @@ export default function DynamicTab() {
                             setItems={setItems}
                             style={{ backgroundColor: palette.inputBg, borderColor: palette.border }}
                             dropDownContainerStyle={{ backgroundColor: palette.listBg, borderColor: palette.border }}
-                            listItemLabelStyle={{ color: palette.success }}
-                            textStyle={{ color: palette.success }}
+                            listItemLabelStyle={{ color: palette.dim }}
+                            textStyle={{ color: palette.dim }}
                             placeholder="Select event..."
                             placeholderStyle={{ color: palette.dim }}
                             ArrowDownIconComponent={() => <Text style={{ color: palette.success, fontSize: 14 }}>▼</Text>}

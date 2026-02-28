@@ -11,10 +11,8 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Platform,
-    Button,
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
-    Alert,
     Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,7 +28,6 @@ type Pit = { carNumber: string; direction: Direction; station: Station; timestam
 const CAR_INPUT_ACCESSORY = 'carNumberAccessory';
 const STORAGE_KEY_PITLOGS = 'mobilescout:pitlogs:v1';
 
-
 /**
  * Renders an input accessory view with a "Done" button for iOS platforms.
  * This component provides a convenient way to dismiss the keyboard on iOS devices.
@@ -41,17 +38,37 @@ const STORAGE_KEY_PITLOGS = 'mobilescout:pitlogs:v1';
  * @returns {React.ReactElement | null} An InputAccessoryView component with a Done button on iOS, or null on other platforms
  */
 function DoneAccessory({ nativeID }: { nativeID: string }) {
-    if (Platform.OS !== 'ios') return null;
-    const { InputAccessoryView } = require('react-native');
+    if (Platform.OS !== "ios") return null;
+
+    // InputAccessoryView is iOS-only and may be undefined in Jest/web shims.
+    const { InputAccessoryView } = require("react-native");
+    if (!InputAccessoryView) return null;
+
     return (
         <InputAccessoryView nativeID={nativeID}>
             <View style={styles.accessoryBar}>
                 <View style={{ flex: 1 }} />
-                <Button title="Done" onPress={Keyboard.dismiss} />
+                {/* Avoid <Button/> here: it renders a TouchableOpacity internally and can be brittle in Jest */}
+                <Pressable
+                    accessibilityRole="button"
+                    onPress={Keyboard.dismiss}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                >
+                    <Text style={{ color: P.txt, fontWeight: "700" }}>Done</Text>
+                </Pressable>
             </View>
         </InputAccessoryView>
     );
 }
+
+/**
+ * Exports utility functions for parsing, formatting, and computing endurance-related data.
+ * 
+ * @exports parseISO - Parses an ISO 8601 date string into a Date object
+ * @exports fmtDuration - Formats a duration into a human-readable string
+ * @exports computeOffTrack - Computes off-track metrics or statistics
+ */
+export { parseISO, fmtDuration, computeOffTrack };
 
 /**
  * Parses an ISO 8601 date string and returns a Date object.
