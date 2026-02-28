@@ -37,8 +37,8 @@ jest.mock("@/components/ui/DismissKeyboard", () => {
 });
 
 // AsyncStorage mock
-const mockGetItem = jest.fn();
-const mockSetItem = jest.fn();
+const mockGetItem = jest.fn(undefined);
+const mockSetItem = jest.fn(undefined);
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
     __esModule: true,
@@ -156,4 +156,5 @@ describe("EnduranceTab - component tests (user-centric interactions)", () => {
 
         expect(await findByDisplayValue("42")).toBeTruthy();
     });
+
 });
