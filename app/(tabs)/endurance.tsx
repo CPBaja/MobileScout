@@ -48,7 +48,6 @@ function DoneAccessory({ nativeID }: { nativeID: string }) {
         <InputAccessoryView nativeID={nativeID}>
             <View style={styles.accessoryBar}>
                 <View style={{ flex: 1 }} />
-                {/* Avoid <Button/> here: it renders a TouchableOpacity internally and can be brittle in Jest */}
                 <Pressable
                     accessibilityRole="button"
                     onPress={Keyboard.dismiss}
@@ -201,14 +200,10 @@ function computeOffTrack(logs: Pit[], carNumber: string, nowMs: number) {
  */
 export default function EnduranceTab() {
     const [car, setCar] = useState('');
-
     const [lookupCar, setLookupCar] = useState('');
-
     const [logs, setLogs] = useState<Pit[]>([]);
-
     const [nowMs, setNowMs] = useState(() => Date.now());
 
-    // hydrate pit logs on mount
     useEffect(() => {
         (async () => {
             try {
@@ -218,7 +213,6 @@ export default function EnduranceTab() {
         })();
     }, []);
 
-    // persist logs whenever they change
     useEffect(() => {
         (async () => {
             try {
@@ -227,7 +221,6 @@ export default function EnduranceTab() {
         })();
     }, [logs]);
 
-    // timer to update active durations
     useEffect(() => {
         const id = setInterval(() => setNowMs(Date.now()), 1000);
         return () => clearInterval(id);
@@ -236,8 +229,8 @@ export default function EnduranceTab() {
     function add(direction: Direction) {
         if (!car.trim()) return;
 
-        const trimmed = car.trim();        
-        setLookupCar(trimmed);          
+        const trimmed = car.trim();
+        setLookupCar(trimmed);
 
         const newEntry: Pit = {
             carNumber: trimmed,
@@ -252,8 +245,6 @@ export default function EnduranceTab() {
         Keyboard.dismiss();
     }
 
-
-    // Web: allow Enter/Escape to blur
     function onWebKeyPress(e: NativeSyntheticEvent<TextInputKeyPressEventData>) {
         if (Platform.OS !== 'web') return;
         const key = e.nativeEvent.key;
@@ -269,7 +260,6 @@ export default function EnduranceTab() {
         web: 'numeric',
     }) as any;
 
-    // Active off-track calculation (updates every second via nowMs)
     const off = useMemo(() => computeOffTrack(logs, lookupCar, nowMs), [logs, lookupCar, nowMs]);
 
     return (
@@ -281,87 +271,90 @@ export default function EnduranceTab() {
             >
                 <View style={{ flex: 1, backgroundColor: P.bg, padding: 12 }}>
                     <AppHeader />
-                    <Card>
-                        <Text style={styles.h2}>Pit Logs</Text>
 
-                        <Text style={styles.label}>Car number</Text>
-                        <TextInput
-                            value={car}
-                            onChangeText={setCar}
-                            placeholder="e.g., 42"
-                            placeholderTextColor={P.dim}
-                            style={styles.input}
-                            keyboardType={carKeyboardType}
-                            inputMode="numeric"
-                            returnKeyType="done"
-                            blurOnSubmit
-                            onSubmitEditing={Keyboard.dismiss}
-                            onKeyPress={onWebKeyPress}
-                            inputAccessoryViewID={Platform.OS === 'ios' ? CAR_INPUT_ACCESSORY : undefined}
-                        />
-                        <DoneAccessory nativeID={CAR_INPUT_ACCESSORY} />
-
-                        <View style={styles.row}>
-                            <PrimaryButton title="Pit In" onPress={() => add('in')} />
-                            <PrimaryButton title="Pit Out" onPress={() => add('out')} />
-                        </View>
-
-                        {/* ---------------- Off-Track Calculation ---------------- */}
-                        <View style={styles.section}>
-                            <Text style={styles.h3}>Off-Track Calculation</Text>
-
-                            <Text style={styles.label}>Lookup car number</Text>
-                            <TextInput
-                                value={lookupCar}
-                                onChangeText={setLookupCar}
-                                placeholder="e.g., 42"
-                                placeholderTextColor={P.dim}
-                                style={styles.input}
-                                keyboardType={carKeyboardType}
-                                inputMode="numeric"
-                                returnKeyType="done"
-                                blurOnSubmit
-                                onSubmitEditing={Keyboard.dismiss}
-                                onKeyPress={onWebKeyPress}
-                            />
-
-                            <View style={styles.metrics}>
-                                <Text style={styles.metric}>
-                                    <Text style={styles.metricKey}>Status: </Text>
-                                    <Text style={{ color: off.status === 'OFF TRACK' ? P.green : P.txt }}>
-                                        {off.status}
-                                    </Text>
-                                </Text>
-
-                                <Text style={styles.metric}>
-                                    <Text style={styles.metricKey}>Current off-track: </Text>
-                                    {off.status === 'OFF TRACK' ? fmtDuration(off.currentOffSeconds) : '—'}
-                                </Text>
-
-                                <Text style={styles.metric}>
-                                    <Text style={styles.metricKey}>Total off-track: </Text>
-                                    {lookupCar.trim() ? fmtDuration(off.totalOffSeconds) : '—'}
-                                </Text>
-
-                                <Text style={styles.metric}>
-                                    <Text style={styles.metricKey}>Last Pit In: </Text>
-                                    {off.lastIn ? off.lastIn.toLocaleString() : '—'}
-                                </Text>
-
-                                <Text style={styles.metric}>
-                                    <Text style={styles.metricKey}>Last Pit Out: </Text>
-                                    {off.lastOut ? off.lastOut.toLocaleString() : '—'}
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* ---------------- Recent logs ---------------- */}
-                        <Text style={styles.h3}>Recent pit events</Text>
+                    <Card style={styles.card}>
                         <FlatList
                             data={logs}
-                            keyExtractor={(i, idx) => i.timestamp + idx}
-                            contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+                            keyExtractor={(item, idx) => item.timestamp + idx}
                             keyboardShouldPersistTaps="always"
+                            contentContainerStyle={styles.listContent}
+                            ListHeaderComponent={
+                                <>
+                                    <Text style={styles.h2}>Pit Logs</Text>
+
+                                    <Text style={styles.label}>Car number</Text>
+                                    <TextInput
+                                        value={car}
+                                        onChangeText={setCar}
+                                        placeholder="e.g., 42"
+                                        placeholderTextColor={P.dim}
+                                        style={styles.input}
+                                        keyboardType={carKeyboardType}
+                                        inputMode="numeric"
+                                        returnKeyType="done"
+                                        blurOnSubmit
+                                        onSubmitEditing={Keyboard.dismiss}
+                                        onKeyPress={onWebKeyPress}
+                                        inputAccessoryViewID={Platform.OS === 'ios' ? CAR_INPUT_ACCESSORY : undefined}
+                                    />
+                                    <DoneAccessory nativeID={CAR_INPUT_ACCESSORY} />
+
+                                    <View style={styles.row}>
+                                        <PrimaryButton title="Pit In" onPress={() => add('in')} />
+                                        <PrimaryButton title="Pit Out" onPress={() => add('out')} />
+                                    </View>
+
+                                    <View style={styles.section}>
+                                        <Text style={styles.h3}>Off-Track Calculation</Text>
+
+                                        <Text style={styles.label}>Lookup car number</Text>
+                                        <TextInput
+                                            value={lookupCar}
+                                            onChangeText={setLookupCar}
+                                            placeholder="e.g., 42"
+                                            placeholderTextColor={P.dim}
+                                            style={styles.input}
+                                            keyboardType={carKeyboardType}
+                                            inputMode="numeric"
+                                            returnKeyType="done"
+                                            blurOnSubmit
+                                            onSubmitEditing={Keyboard.dismiss}
+                                            onKeyPress={onWebKeyPress}
+                                        />
+
+                                        <View style={styles.metrics}>
+                                            <Text style={styles.metric}>
+                                                <Text style={styles.metricKey}>Status: </Text>
+                                                <Text style={{ color: off.status === 'OFF TRACK' ? P.green : P.txt }}>
+                                                    {off.status}
+                                                </Text>
+                                            </Text>
+
+                                            <Text style={styles.metric}>
+                                                <Text style={styles.metricKey}>Current off-track: </Text>
+                                                {off.status === 'OFF TRACK' ? fmtDuration(off.currentOffSeconds) : '—'}
+                                            </Text>
+
+                                            <Text style={styles.metric}>
+                                                <Text style={styles.metricKey}>Total off-track: </Text>
+                                                {lookupCar.trim() ? fmtDuration(off.totalOffSeconds) : '—'}
+                                            </Text>
+
+                                            <Text style={styles.metric}>
+                                                <Text style={styles.metricKey}>Last Pit In: </Text>
+                                                {off.lastIn ? off.lastIn.toLocaleString() : '—'}
+                                            </Text>
+
+                                            <Text style={styles.metric}>
+                                                <Text style={styles.metricKey}>Last Pit Out: </Text>
+                                                {off.lastOut ? off.lastOut.toLocaleString() : '—'}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.h3}>Recent pit events</Text>
+                                </>
+                            }
                             renderItem={({ item }) => (
                                 <Pressable onPress={() => setLookupCar(item.carNumber)} style={styles.item}>
                                     <Text style={{ color: P.txt }}>
@@ -369,7 +362,9 @@ export default function EnduranceTab() {
                                     </Text>
                                 </Pressable>
                             )}
-
+                            ListEmptyComponent={
+                                <Text style={styles.empty}>No pit events yet.</Text>
+                            }
                         />
                     </Card>
                 </View>
@@ -379,6 +374,13 @@ export default function EnduranceTab() {
 }
 
 const styles = StyleSheet.create({
+    card: {
+        flex: 1,
+    },
+    listContent: {
+        paddingBottom: 16,
+        gap: 8,
+    },
     h2: { color: P.txt, fontSize: 16, fontWeight: '700', marginBottom: 10 },
     h3: { color: P.txt, fontSize: 15, fontWeight: '700', marginTop: 10, marginBottom: 6 },
     label: { color: P.dim, marginBottom: 6 },
@@ -412,4 +414,8 @@ const styles = StyleSheet.create({
     metrics: { gap: 6, marginTop: 6 },
     metric: { color: P.txt },
     metricKey: { fontWeight: '700' },
+    empty: {
+        color: P.dim,
+        paddingVertical: 8,
+    },
 });
